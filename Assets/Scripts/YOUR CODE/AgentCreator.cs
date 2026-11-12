@@ -1,4 +1,5 @@
 using System;
+using YOUR_CODE;
 
 public class AgentCreator
 {
@@ -8,21 +9,21 @@ public class AgentCreator
 	/// </summary>
 	static public readonly Type[] AllySteeringAgentTypes = new Type[]
     {
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent),
-		typeof(AllyAgent)
+		typeof(GeneralAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(GeneralAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(GeneralAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent),
+		typeof(PawnAgent)
 	};
 }
