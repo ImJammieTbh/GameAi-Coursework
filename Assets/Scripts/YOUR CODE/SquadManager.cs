@@ -24,3 +24,5 @@ namespace YOUR_CODE {
         }
     }
 }
+
+//TODO Add pathfinding for the generals and a case for if all generals die
