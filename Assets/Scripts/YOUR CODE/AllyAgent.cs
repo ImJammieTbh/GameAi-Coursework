@@ -1,67 +1,150 @@
 using UnityEngine;
 
-public class AllyAgent : SteeringAgent
-{
-    private Attack.AttackType attackType = Attack.AttackType.AllyGun;
-
-    protected override void InitialiseFromAwake()
+namespace YOUR_CODE {
+    public class AllyAgent : SteeringAgent
     {
-        gameObject.AddComponent<SeekToMouse>();
-    }
+        private Attack.AttackType attackType = Attack.AttackType.AllyGun;
+        
+        private WanderBehaviour wander;
+        private SteeringAgent spottedEnemy;
+        private float lastSeenTime = -999f;
+        private const float AlertMemorySeconds = 0.75f;
 
-    protected override void CooperativeArbitration(float deltaTime)
-    {
-        base.CooperativeArbitration(deltaTime);
+        /// <summary>Enemy this agent currently has spotted (pawns read this from their general)</summary>
+        public SteeringAgent SpottedEnemy => spottedEnemy;
+        public bool HasAttackOrder => spottedEnemy != null && spottedEnemy.Health > 0f;
 
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        protected override void InitialiseFromAwake()
         {
-            attackType = Attack.AttackType.Melee;
+            gameObject.AddComponent<SeekToMouse>();
         }
-        if (Input.GetKeyDown(KeyCode.Alpha2))
+
+        // Scouting = has WanderBehaviour and isn't being steered by the mouse
+        private bool IsScouting(SeekToMouse seek)
         {
-            attackType = Attack.AttackType.AllyGun;
+            return wander != null && (seek == null || !seek.enabled);
         }
-        if (Input.GetKeyDown(KeyCode.Alpha3))
+
+        protected override void CooperativeArbitration(float deltaTime)
         {
-            attackType = Attack.AttackType.AllyRocket;
-        }
-        if (Input.GetKeyDown(KeyCode.Alpha4))
-        {
-            attackType = Attack.AttackType.Grenade;
-        }
-        if (Input.GetKey(KeyCode.Space))
-        {
-            if(attackType == Attack.AttackType.AllyRocket && GameData.Instance.AllyRocketsAvailable <= 0)
+            var seekToMouse = GetComponent<SeekToMouse>();
+            if (wander == null) wander = GetComponent<WanderBehaviour>();
+
+            bool scouting = IsScouting(seekToMouse);
+
+            //Decide BEFORE base so the wander behaviour is already on/off when steering is summed
+            if (scouting) UpdateSpotting(); else spottedEnemy = null;
+            if (wander != null) wander.enabled = scouting && spottedEnemy == null;
+
+            base.CooperativeArbitration(deltaTime);
+
+            if (scouting && spottedEnemy != null)
+            {
+                EngageEnemy();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Alpha1))
+            {
+                attackType = Attack.AttackType.Melee;
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha2))
             {
                 attackType = Attack.AttackType.AllyGun;
             }
+            if (Input.GetKeyDown(KeyCode.Alpha3))
+            {
+                attackType = Attack.AttackType.AllyRocket;
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha4))
+            {
+                attackType = Attack.AttackType.Grenade;
+            }
+            if (Input.GetKey(KeyCode.Space))
+            {
+                if(attackType == Attack.AttackType.AllyRocket && GameData.Instance.AllyRocketsAvailable <= 0)
+                {
+                    attackType = Attack.AttackType.AllyGun;
+                }
 
-            AttackWith(attackType);
+                AttackWith(attackType);
+            }
+            
+            if(Input.GetMouseButtonDown(1) && seekToMouse != null)
+            {
+                SteeringVelocity = Vector3.zero;
+                CurrentVelocity = Vector3.zero;
+                seekToMouse.enabled = !seekToMouse.enabled;
+            }
         }
 
-        // CHANGED: guarded so subclasses without SeekToMouse (PawnAgent) don't throw
-        var seekToMouse = GetComponent<SeekToMouse>();
-        if(Input.GetMouseButtonDown(1) && seekToMouse != null)
+        private void UpdateSpotting()
         {
-            SteeringVelocity = Vector3.zero;
-            CurrentVelocity = Vector3.zero;
-            seekToMouse.enabled = !seekToMouse.enabled;
-        }
-    }
+            if (spottedEnemy != null && spottedEnemy.Health <= 0f)
+            {
+                spottedEnemy = null;
+            }
 
-    protected override void UpdateDirection()
-    {
-        // CHANGED: no SeekToMouse (pawn) -> just face the direction of travel
-        var seekToMouse = GetComponent<SeekToMouse>();
-        if (seekToMouse == null || seekToMouse.enabled)
-        {
-            base.UpdateDirection();
+            var visible = AllyPerceptionHelper.FindVisibleEnemy(this);
+            if (visible != null)
+            {
+                spottedEnemy = visible;
+                lastSeenTime = Time.time;
+            }
+            else if (Time.time - lastSeenTime > AlertMemorySeconds)
+            {
+                spottedEnemy = null;
+            }
         }
-        else
+
+        private void EngageEnemy()
         {
-            var mouseInWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            mouseInWorld.z = 0.0f;
-            transform.up = Vector3.Normalize(mouseInWorld - transform.position);
+            Vector3 toEnemy = spottedEnemy.transform.position - transform.position;
+            toEnemy.z = 0.0f;
+            float distance = toEnemy.magnitude;
+            if (distance < 0.001f) return;
+
+            Vector3 direction = toEnemy / distance;
+            float gunRange = Attack.AllyGunData.range;
+
+            //Hold position and let the pawns screen us. Back away if the enemy gets inside its gun range.
+            const float SafeDistance = 18f;
+            Vector3 desiredVelocity = distance < SafeDistance ? -direction * MaxCurrentSpeed : Vector3.zero;
+            SteeringVelocity = desiredVelocity - CurrentVelocity;
+
+            //Attacks fire along transform.up and UpdateDirection runs after this, so aim now
+            transform.up = direction;
+
+            bool clearShot = AllyPerceptionHelper.HasLineOfSight(GameData.Instance.Map, transform.position, spottedEnemy.transform.position);
+            if (clearShot && distance <= gunRange && CanAttack(Attack.AttackType.AllyGun))
+            {
+                AttackWith(Attack.AttackType.AllyGun);
+            }
+        }
+
+        protected override void UpdateDirection()
+        {
+            var seekToMouse = GetComponent<SeekToMouse>();
+
+            if (IsScouting(seekToMouse))
+            {
+                //Engaged: already aimed at the enemy. Otherwise face travel direction.
+                if (spottedEnemy == null)
+                {
+                    base.UpdateDirection();
+                }
+                return;
+            }
+            
+            if (seekToMouse == null || seekToMouse.enabled)
+            {
+                base.UpdateDirection();
+            }
+            else
+            {
+                var mouseInWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                mouseInWorld.z = 0.0f;
+                transform.up = Vector3.Normalize(mouseInWorld - transform.position);
+            }
         }
     }
 }

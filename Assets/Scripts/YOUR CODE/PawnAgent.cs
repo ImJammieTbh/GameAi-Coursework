@@ -1,33 +1,90 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace YOUR_CODE {
-    /// <summary>
-    /// An ally that follows a general. Everything else (attack keys, firing, direction) is inherited from AllyAgent;
-    /// movement comes from the two behaviours added below, summed by the stock CooperativeArbitration.
-    /// </summary>
     public class PawnAgent : AllyAgent
     {
         public GeneralAgent General { get; private set; }
 
-        // Scratch list so we can reuse SteeringAgent.GetNearestAgent (which also skips dead agents)
         static readonly List<SteeringAgent> generalsScratch = new List<SteeringAgent>();
+
+        private float orderReceivedTime = -1f;
+        private float reactionDelay;
+        
+        private FollowGeneralBehaviour followBehaviour;
+        private ProtectGeneralBehaviour protectBehaviour;
 
         protected override void InitialiseFromAwake()
         {
             // Deliberately NOT calling base: AllyAgent would add SeekToMouse, pawns follow a general instead
-            gameObject.AddComponent<FollowGeneralBehaviour>();
+            followBehaviour = gameObject.AddComponent<FollowGeneralBehaviour>();
+            protectBehaviour = gameObject.AddComponent<ProtectGeneralBehaviour>();
+            protectBehaviour.enabled = false;
             gameObject.AddComponent<FlockBehaviour>();
         }
 
         protected override void CooperativeArbitration(float deltaTime)
         {
-            // Pick the nearest living general, and re-pick if ours dies
             if (General == null || General.Health <= 0.0f)
             {
                 General = FindNearestGeneral();
             }
 
+            bool ordered = General != null && General.HasAttackOrder;
+            followBehaviour.enabled = !ordered;       // stop trailing the general...
+            protectBehaviour.enabled = ordered;        // ...and advance in front of it
+
             base.CooperativeArbitration(deltaTime);
+
+            ObeyGeneral();
+        }
+
+        private void ObeyGeneral()
+        {
+            if (General == null || !General.HasAttackOrder)
+            {
+                orderReceivedTime = -1f;
+                return;
+            }
+
+            // Fresh order: small random reaction time so pawns don't all fire on the same frame
+            if (orderReceivedTime < 0f)
+            {
+                orderReceivedTime = Time.time;
+                reactionDelay = Random.Range(0.1f, 0.5f);
+            }
+            if (Time.time - orderReceivedTime < reactionDelay) return;
+
+            SteeringAgent target = General.SpottedEnemy;
+            Vector3 toTarget = target.transform.position - transform.position;
+            toTarget.z = 0f;
+            float distance = toTarget.magnitude;
+            if (distance < 0.001f) return;
+
+            bool inRange = distance <= Attack.AllyGunData.range;
+            bool clearShot = AllyPerceptionHelper.HasLineOfSight(
+                GameData.Instance.Map, transform.position, target.transform.position);
+
+            if (inRange && clearShot && CanAttack(Attack.AttackType.AllyGun))
+            {
+                transform.up = toTarget / distance;
+                AttackWith(Attack.AttackType.AllyGun);
+            }
+        }
+
+        protected override void UpdateDirection()
+        {
+            if (General != null && General.HasAttackOrder)
+            {
+                Vector3 d = General.SpottedEnemy.transform.position - transform.position;
+                d.z = 0f;
+                if (d.sqrMagnitude > 0.001f)
+                {
+                    transform.up = d.normalized;
+                    return;
+                }
+            }
+            base.UpdateDirection();
         }
 
         GeneralAgent FindNearestGeneral()
