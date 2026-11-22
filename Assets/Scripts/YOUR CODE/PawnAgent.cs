@@ -30,7 +30,7 @@ namespace YOUR_CODE {
                 General = FindNearestGeneral();
             }
 
-            bool ordered = General != null && General.HasAttackOrder;
+            bool ordered = General != null && General.IsFighting;
             followBehaviour.enabled = !ordered;       // stop trailing the general...
             protectBehaviour.enabled = ordered;        // ...and advance in front of it
 
@@ -41,7 +41,7 @@ namespace YOUR_CODE {
 
         private void ObeyGeneral()
         {
-            if (General == null || !General.HasAttackOrder)
+            if (General == null || !General.IsFighting)
             {
                 orderReceivedTime = -1f;
                 return;
@@ -74,7 +74,7 @@ namespace YOUR_CODE {
 
         protected override void UpdateDirection()
         {
-            if (General != null && General.HasAttackOrder)
+            if (General != null && General.IsFighting)
             {
                 Vector3 d = General.SpottedEnemy.transform.position - transform.position;
                 d.z = 0f;

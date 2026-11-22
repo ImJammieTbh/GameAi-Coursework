@@ -4,23 +4,38 @@ using System.Collections.Generic;
 
 namespace YOUR_CODE {
     public class SquadManager : MonoBehaviour {
-        public List<SteeringAgent> generals = new List<SteeringAgent>();
+        public List<AllyAgent> generals = new List<AllyAgent>();
+        public List<bool> isFighting = new List<bool>();
 
         private void Start() {
             Initialise();
         }
 
+        private void Update() {
+            for(int i = 0; i < isFighting.Count; i++)
+            {
+                isFighting[i] = generals[i].IsFighting;
+            }
+        }
+
         private void Initialise() {
             GetGenerals();
+            foreach (var general in generals) {
+                isFighting.Add(false);
+            }
         }
 
         private void GetGenerals() {
             generals.Clear();
-            foreach (SteeringAgent ally in GameData.Instance.allies) {
+            foreach (AllyAgent ally in GameData.Instance.allies) {
                 if (ally is GeneralAgent) {
                     generals.Add(ally);
                 }
             }
+        }
+
+        private void CallBackup() {
+            
         }
     }
 }

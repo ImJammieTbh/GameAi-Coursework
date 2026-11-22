@@ -9,12 +9,12 @@
         {
             base.InitialiseFromAwake();                    // adds SeekToMouse
 
-            gameObject.AddComponent<WanderBehaviour>();    // makes AllyAgent treat this as a scout
+            gameObject.AddComponent<WanderBehaviour>();    // makes AllyAgent treat this as a general
 
             var mouse = GetComponent<SeekToMouse>();
             if (mouse != null)
             {
-                mouse.enabled = false;                     // start in scout mode
+                mouse.enabled = false;                     // start in wander mode
             }
         }
     }

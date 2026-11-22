@@ -22,7 +22,7 @@ namespace YOUR_CODE {
         public override Vector3 UpdateBehaviour(SteeringAgent agent)
         {
             var pawn = agent as PawnAgent;
-            if (pawn == null || pawn.General == null || !pawn.General.HasAttackOrder)
+            if (pawn == null || pawn.General == null || !pawn.General.IsFighting)
             {
                 desiredVelocity = Vector3.zero;
                 steeringVelocity = Vector3.zero;
@@ -37,7 +37,7 @@ namespace YOUR_CODE {
             dir = dir.sqrMagnitude > 0.001f ? dir.normalized : Vector3.up;
             Vector3 perp = new Vector3(-dir.y, dir.x, 0f);
 
-            // Stand point: between us and the enemy, ahead of the general, spread sideways
+            //Stand point: between us and the enemy, ahead of the general, spread sideways
             Vector3 stand = enemyPos - dir * StandOffFromEnemy + perp * lateral;
             stand = FindWalkable(stand, generalPos);
 
